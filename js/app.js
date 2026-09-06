@@ -13,6 +13,21 @@ const GEM_COLORS = {
   emerald: '#2f8f5f',
 };
 
+const BAND_MATERIAL = {
+  gold: { color: 0xd9ac5c, metalness: 1, roughness: 0.28 },
+  rose: { color: 0xe3ab92, metalness: 1, roughness: 0.3 },
+  silver: { color: 0xd0d1d3, metalness: 1, roughness: 0.2 },
+  platinum: { color: 0xdedcd4, metalness: 1, roughness: 0.16 },
+};
+
+const GEM_HEX = {
+  none: null,
+  diamond: 0xf5fbff,
+  sapphire: 0x2f4fae,
+  ruby: 0xa31f36,
+  emerald: 0x1f8f5f,
+};
+
 const PRODUCTS = [
   { id: 'r1', name: 'Кольцо «Вечность»', category: 'wedding', material: 'Золото 585', band: 'gold', gem: 'none', price: 24900 },
   { id: 'r2', name: 'Кольцо «Классика»', category: 'wedding', material: 'Серебро 925', band: 'silver', gem: 'none', price: 8900 },
@@ -53,20 +68,207 @@ function formatPrice(value) {
   return value.toLocaleString('ru-RU') + ' ₽';
 }
 
-const CART_KEY = 'aureliaCart';
+/* ---------- 3D ring engine (Three.js) ---------- */
+
+const POOL_SIZE = 6;
+const ringPool = [];
+let heroRing = null;
+let modalRing = null;
+const activeRenderers = new Set();
+const ringClock = new THREE.Clock();
+const has3D = typeof THREE !== 'undefined';
+
+function makeRingInstance() {
+  const canvas = document.createElement('canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'low-power' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.35;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 10);
+  camera.position.set(0, 0.5, 4.1);
+  camera.lookAt(0, -0.05, 0);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  scene.add(new THREE.HemisphereLight(0xfff6e6, 0x2a2013, 1.1));
+  const key = new THREE.DirectionalLight(0xfff2da, 2.0);
+  key.position.set(2.2, 2.6, 2.4);
+  scene.add(key);
+  const key2 = new THREE.DirectionalLight(0xffffff, 1.3);
+  key2.position.set(-1.8, 1.4, 2.8);
+  scene.add(key2);
+  const rim = new THREE.DirectionalLight(0xffcf8f, 1.1);
+  rim.position.set(-2.4, -1.2, -2);
+  scene.add(rim);
+  const under = new THREE.DirectionalLight(0xbfe0ff, 0.6);
+  under.position.set(0.5, -2.4, 1.5);
+  scene.add(under);
+
+  const group = new THREE.Group();
+
+  const bandGeo = new THREE.TorusGeometry(1, 0.3, 36, 110);
+  bandGeo.rotateX(Math.PI / 2.55);
+  const bandMat = new THREE.MeshStandardMaterial({ color: 0xd9ac5c, metalness: 0.6, roughness: 0.3 });
+  const band = new THREE.Mesh(bandGeo, bandMat);
+  group.add(band);
+
+  const gemGeo = new THREE.IcosahedronGeometry(0.26, 1);
+  gemGeo.scale(1, 1.1, 1);
+  const gemMat = new THREE.MeshPhysicalMaterial({
+    color: 0xffffff, metalness: 0.05, roughness: 0.2, clearcoat: 1, clearcoatRoughness: 0.15,
+  });
+  const gem = new THREE.Mesh(gemGeo, gemMat);
+  gem.position.set(0, 0.42, 0.55);
+  gem.visible = false;
+  group.add(gem);
+
+  group.rotation.x = -0.15;
+
+  scene.add(group);
+
+  return {
+    canvas, renderer, scene, camera, group, bandMat, gem, gemMat,
+    mounted: null, productId: null, dragging: false,
+  };
+}
+
+function resizeRingInstance(inst, w, h) {
+  if (!w || !h) return;
+  inst.renderer.setSize(w, h, false);
+  inst.camera.aspect = w / h;
+  inst.camera.updateProjectionMatrix();
+}
+
+function applyProductToRing(inst, product) {
+  const bm = BAND_MATERIAL[product.band];
+  inst.bandMat.color.setHex(bm.color);
+  inst.bandMat.metalness = bm.metalness;
+  inst.bandMat.roughness = bm.roughness;
+  const gemHex = GEM_HEX[product.gem];
+  if (gemHex) {
+    inst.gem.visible = true;
+    inst.gemMat.color.setHex(gemHex);
+  } else {
+    inst.gem.visible = false;
+  }
+  inst.productId = product.id;
+}
+
+function mountRing(inst, container) {
+  if (inst.mounted === container) return;
+  container.innerHTML = '';
+  container.appendChild(inst.canvas);
+  inst.mounted = container;
+  const rect = container.getBoundingClientRect();
+  resizeRingInstance(inst, Math.round(rect.width), Math.round(rect.height));
+  activeRenderers.add(inst);
+}
+
+function unmountRing(inst) {
+  if (inst.mounted && inst.canvas.parentElement === inst.mounted) {
+    inst.mounted.innerHTML = '';
+  }
+  inst.mounted = null;
+  inst.productId = null;
+  activeRenderers.delete(inst);
+}
+
+function ringTick() {
+  const delta = Math.min(ringClock.getDelta(), 0.05);
+  activeRenderers.forEach((inst) => {
+    if (!inst.dragging) inst.group.rotation.y += delta * 0.55;
+    inst.renderer.render(inst.scene, inst.camera);
+  });
+  requestAnimationFrame(ringTick);
+}
+
+function attachDrag(inst) {
+  let lastX = 0, lastY = 0;
+  inst.canvas.addEventListener('pointerdown', (e) => {
+    inst.dragging = true;
+    lastX = e.clientX; lastY = e.clientY;
+    inst.canvas.setPointerCapture(e.pointerId);
+    inst.canvas.style.cursor = 'grabbing';
+  });
+  inst.canvas.addEventListener('pointermove', (e) => {
+    if (!inst.dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    inst.group.rotation.y += dx * 0.012;
+    inst.group.rotation.x = Math.max(-0.6, Math.min(0.6, inst.group.rotation.x + dy * 0.012));
+    lastX = e.clientX; lastY = e.clientY;
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((evt) => {
+    inst.canvas.addEventListener(evt, () => {
+      inst.dragging = false;
+      inst.canvas.style.cursor = 'grab';
+    });
+  });
+}
+
+let gridObserver = null;
+
+function refreshPoolAssignments() {
+  const placeholders = Array.from(document.querySelectorAll('.product-image'));
+  const visible = placeholders.filter((p) => p.dataset.visible === '1');
+
+  ringPool.forEach((inst) => {
+    if (inst.productId && !visible.some((p) => p.dataset.productId === inst.productId)) {
+      unmountRing(inst);
+    }
+  });
+
+  visible.forEach((p) => {
+    const pid = p.dataset.productId;
+    const already = ringPool.find((inst) => inst.productId === pid);
+    if (already) { mountRing(already, p); return; }
+    const free = ringPool.find((inst) => !inst.productId);
+    if (free) {
+      const product = PRODUCTS.find((pr) => pr.id === pid);
+      applyProductToRing(free, product);
+      mountRing(free, p);
+    }
+  });
+}
+
+function observeGrid() {
+  if (!gridObserver) {
+    gridObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        entry.target.dataset.visible = entry.isIntersecting ? '1' : '0';
+      });
+      refreshPoolAssignments();
+    }, { rootMargin: '120px' });
+  } else {
+    gridObserver.disconnect();
+  }
+  document.querySelectorAll('.product-image').forEach((el) => gridObserver.observe(el));
+}
+
+function initRingEngine() {
+  if (!has3D) return;
+  for (let i = 0; i < POOL_SIZE; i++) ringPool.push(makeRingInstance());
+  requestAnimationFrame(ringTick);
+
+  window.addEventListener('resize', () => {
+    [heroRing, modalRing, ...ringPool].forEach((inst) => {
+      if (inst && inst.mounted) {
+        const rect = inst.mounted.getBoundingClientRect();
+        resizeRingInstance(inst, Math.round(rect.width), Math.round(rect.height));
+      }
+    });
+  });
+}
+
+const CART_KEY = 'aureliaCartPreview';
 
 function getCart() {
-  try {
-    return JSON.parse(localStorage.getItem(CART_KEY)) || {};
-  } catch {
-    return {};
-  }
+  try { return JSON.parse(localStorage.getItem(CART_KEY)) || {}; } catch { return {}; }
 }
 
 function saveCart(cart) {
-  try {
-    localStorage.setItem(CART_KEY, JSON.stringify(cart));
-  } catch {}
+  try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch {}
 }
 
 function addToCart(id, qty = 1) {
@@ -79,11 +281,7 @@ function addToCart(id, qty = 1) {
 
 function setQty(id, qty) {
   const cart = getCart();
-  if (qty <= 0) {
-    delete cart[id];
-  } else {
-    cart[id] = qty;
-  }
+  if (qty <= 0) delete cart[id]; else cart[id] = qty;
   saveCart(cart);
   renderCart();
 }
@@ -96,8 +294,7 @@ function removeFromCart(id) {
 }
 
 function getCartCount() {
-  const cart = getCart();
-  return Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+  return Object.values(getCart()).reduce((sum, qty) => sum + qty, 0);
 }
 
 function getCartTotal() {
@@ -113,10 +310,10 @@ function renderProductGrid(filter = 'all') {
   const list = filter === 'all' ? PRODUCTS : PRODUCTS.filter((p) => p.category === filter);
   grid.innerHTML = list.map((p) => `
     <div class="product-card">
-      <div class="product-image" data-open-product="${p.id}">${ringSVG(p, p.id)}</div>
+      <div class="product-image" data-open-product="${p.id}" data-product-id="${p.id}">${has3D ? '' : ringSVG(p, p.id)}</div>
       <div class="product-body">
         <div class="product-name">${p.name}</div>
-        <div class="product-material">${p.material}</div>
+        <p class="product-material">${p.material}</p>
         <div class="product-price">${formatPrice(p.price)}</div>
         <div class="product-actions">
           <button class="add-btn" data-add="${p.id}">В корзину</button>
@@ -124,6 +321,31 @@ function renderProductGrid(filter = 'all') {
       </div>
     </div>
   `).join('');
+
+  attachTilt();
+  if (has3D) {
+    observeGrid();
+    refreshPoolAssignments();
+  }
+}
+
+function attachTilt(selector = '.product-card', max = 7) {
+  document.querySelectorAll(selector).forEach((el) => {
+    if (el.dataset.tiltReady) return;
+    el.dataset.tiltReady = '1';
+    el.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch') return;
+      const rect = el.getBoundingClientRect();
+      const px = (e.clientX - rect.left) / rect.width - 0.5;
+      const py = (e.clientY - rect.top) / rect.height - 0.5;
+      el.style.setProperty('--ry', `${px * max * 2}deg`);
+      el.style.setProperty('--rx', `${-py * max * 2}deg`);
+    });
+    el.addEventListener('pointerleave', () => {
+      el.style.setProperty('--rx', '0deg');
+      el.style.setProperty('--ry', '0deg');
+    });
+  });
 }
 
 function renderCart() {
@@ -177,7 +399,9 @@ function openProductModal(id) {
   content.innerHTML = `
     <button class="close-btn" id="closeProductModal" aria-label="Закрыть" style="position:absolute;top:16px;right:20px;">&times;</button>
     <div class="product-view">
-      <div class="product-view-image">${ringSVG(product, 'm-' + product.id)}</div>
+      <div class="product-view-image" id="modalRingMount">
+        ${has3D ? '<p class="product-view-hint">Потяните, чтобы повернуть</p>' : ringSVG(product, 'm-' + product.id)}
+      </div>
       <div class="product-view-info">
         <h3>${product.name}</h3>
         <p class="product-material">${product.material}</p>
@@ -194,33 +418,51 @@ function openProductModal(id) {
   modal.classList.add('open');
   document.getElementById('overlay').classList.add('active');
 
+  if (has3D) {
+    if (!modalRing) {
+      modalRing = makeRingInstance();
+      attachDrag(modalRing);
+    }
+    applyProductToRing(modalRing, product);
+    modalRing.group.rotation.set(0, 0, 0);
+    const hint = document.querySelector('.product-view-hint');
+    const mount = document.getElementById('modalRingMount');
+    mount.appendChild(modalRing.canvas);
+    if (hint) mount.appendChild(hint);
+    modalRing.canvas.style.cursor = 'grab';
+    const rect = mount.getBoundingClientRect();
+    resizeRingInstance(modalRing, Math.round(rect.width), Math.round(rect.height));
+    modalRing.mounted = mount;
+    activeRenderers.add(modalRing);
+  }
+
   let qty = 1;
   const qtyEl = document.getElementById('modalQty');
-  document.getElementById('modalInc').addEventListener('click', () => {
-    qty += 1;
-    qtyEl.textContent = qty;
-  });
-  document.getElementById('modalDec').addEventListener('click', () => {
-    qty = Math.max(1, qty - 1);
-    qtyEl.textContent = qty;
-  });
-  document.getElementById('modalAdd').addEventListener('click', () => {
-    addToCart(product.id, qty);
-    closeModal(modal);
-  });
+  document.getElementById('modalInc').addEventListener('click', () => { qty += 1; qtyEl.textContent = qty; });
+  document.getElementById('modalDec').addEventListener('click', () => { qty = Math.max(1, qty - 1); qtyEl.textContent = qty; });
+  document.getElementById('modalAdd').addEventListener('click', () => { addToCart(product.id, qty); closeModal(modal); });
   document.getElementById('closeProductModal').addEventListener('click', () => closeModal(modal));
 }
 
 function closeModal(modal) {
   modal.classList.remove('open');
+  if (modal.id === 'productModal' && modalRing) {
+    activeRenderers.delete(modalRing);
+  }
   if (!document.getElementById('cartDrawer').classList.contains('open')) {
     document.getElementById('overlay').classList.remove('active');
   }
 }
 
 function initHero() {
-  const hero = PRODUCTS[4];
-  document.getElementById('heroVisual').innerHTML = ringSVG(hero, 'hero');
+  const container = document.getElementById('heroVisual');
+  if (!has3D) {
+    container.innerHTML = ringSVG(PRODUCTS[4], 'hero');
+    return;
+  }
+  heroRing = makeRingInstance();
+  applyProductToRing(heroRing, PRODUCTS[4]);
+  mountRing(heroRing, container);
 }
 
 function initFilters() {
@@ -236,14 +478,9 @@ function initFilters() {
 function initGridEvents() {
   document.getElementById('productGrid').addEventListener('click', (e) => {
     const addBtn = e.target.closest('[data-add]');
-    if (addBtn) {
-      addToCart(addBtn.dataset.add, 1);
-      return;
-    }
+    if (addBtn) { addToCart(addBtn.dataset.add, 1); return; }
     const imageEl = e.target.closest('[data-open-product]');
-    if (imageEl) {
-      openProductModal(imageEl.dataset.openProduct);
-    }
+    if (imageEl) openProductModal(imageEl.dataset.openProduct);
   });
 }
 
@@ -303,24 +540,17 @@ function initContactForm() {
 
 function initNav() {
   const nav = document.getElementById('mainNav');
-  document.getElementById('burgerBtn').addEventListener('click', () => {
-    nav.classList.toggle('open');
-  });
-  nav.querySelectorAll('a').forEach((a) => {
-    a.addEventListener('click', () => nav.classList.remove('open'));
-  });
+  document.getElementById('burgerBtn').addEventListener('click', () => nav.classList.toggle('open'));
+  nav.querySelectorAll('a').forEach((a) => a.addEventListener('click', () => nav.classList.remove('open')));
 }
 
 document.addEventListener('click', (e) => {
-  if (e.target.id === 'productModal') {
-    document.getElementById('productModal').classList.remove('open');
-  }
-  if (e.target.id === 'checkoutModal') {
-    document.getElementById('checkoutModal').classList.remove('open');
-  }
+  if (e.target.id === 'productModal') document.getElementById('productModal').classList.remove('open');
+  if (e.target.id === 'checkoutModal') document.getElementById('checkoutModal').classList.remove('open');
 });
 
 function init() {
+  initRingEngine();
   initHero();
   renderProductGrid();
   renderCart();
@@ -330,6 +560,7 @@ function init() {
   initCheckout();
   initContactForm();
   initNav();
+  attachTilt('.delivery-card', 5);
 }
 
 document.addEventListener('DOMContentLoaded', init);
