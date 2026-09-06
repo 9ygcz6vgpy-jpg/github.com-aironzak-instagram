@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aurelia — Магазин колец</title>
+<meta name="description" content="Aurelia — украшения на всю жизнь. Обручальные, помолвочные, мужские кольца и кольца с камнями.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='55' r='28' fill='none' stroke='%23b8925a' stroke-width='10'/%3E%3Ccircle cx='50' cy='20' r='7' fill='%23e9f6ff' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container header-inner">
+    <a href="#top" class="logo">Aurelia</a>
+
+    <nav class="main-nav" id="mainNav">
+      <a href="#catalog">Каталог</a>
+      <a href="#about">О нас</a>
+      <a href="#delivery">Доставка</a>
+      <a href="#contacts">Контакты</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="cart-btn" id="cartBtn" aria-label="Корзина">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6">
+          <circle cx="12" cy="12" r="7"/>
+          <circle cx="12" cy="12" r="2.6"/>
+        </svg>
+        <span class="cart-count" id="cartCount">0</span>
+      </button>
+      <button class="burger" id="burgerBtn" aria-label="Меню">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<section class="hero" id="top">
+  <div class="container hero-inner">
+    <div class="hero-text">
+      <p class="hero-eyebrow">Ювелирная мастерская</p>
+      <h1>Кольца, которые остаются<br>навсегда</h1>
+      <p class="hero-sub">Золото 585 и 925 пробы, натуральные камни, ручная огранка деталей. Обручальные, помолвочные и мужские кольца из собственной мастерской.</p>
+      <a href="#catalog" class="btn btn-primary">Смотреть каталог</a>
+    </div>
+    <div class="hero-visual" id="heroVisual" aria-hidden="true"></div>
+  </div>
+</section>
+
+<section class="catalog" id="catalog">
+  <div class="container">
+    <h2 class="section-title">Каталог</h2>
+
+    <div class="filters" id="filters">
+      <button class="filter-btn active" data-category="all">Все</button>
+      <button class="filter-btn" data-category="wedding">Обручальные</button>
+      <button class="filter-btn" data-category="engagement">Помолвочные</button>
+      <button class="filter-btn" data-category="gemstone">С камнями</button>
+      <button class="filter-btn" data-category="men">Мужские</button>
+    </div>
+
+    <div class="product-grid" id="productGrid"></div>
+  </div>
+</section>
+
+<section class="about" id="about">
+  <div class="container about-inner">
+    <div class="about-text">
+      <h2 class="section-title">О нас</h2>
+      <p>Aurelia — небольшая мастерская, где каждое кольцо собирается вручную. Мы работаем с золотом 585 и 925 пробы, платиной и сертифицированными камнями: бриллиантами, сапфирами, изумрудами и рубинами.</p>
+      <p>На все изделия действует гарантия 2 года и бесплатное изменение размера в течение 30 дней с момента покупки.</p>
+      <ul class="about-list">
+        <li>Ручная работа и контроль качества на каждом этапе</li>
+        <li>Сертификат на драгоценные камни</li>
+        <li>Гравировка внутри кольца — бесплатно</li>
+        <li>Гарантия 2 года</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="delivery" id="delivery">
+  <div class="container">
+    <h2 class="section-title">Доставка и оплата</h2>
+    <div class="delivery-grid">
+      <div class="delivery-card">
+        <h3>Курьером по городу</h3>
+        <p>1–2 дня, бесплатно при заказе от 20 000 ₽. Примерка перед покупкой.</p>
+      </div>
+      <div class="delivery-card">
+        <h3>По России</h3>
+        <p>Транспортными компаниями и Почтой России, 3–7 дней. Оплата при получении.</p>
+      </div>
+      <div class="delivery-card">
+        <h3>Оплата</h3>
+        <p>Картой онлайн, при получении или в мастерской. Рассрочка на срок до 6 месяцев.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="contacts" id="contacts">
+  <div class="container contacts-inner">
+    <div class="contacts-info">
+      <h2 class="section-title">Контакты</h2>
+      <p><strong>Телефон:</strong> +7 (900) 123-45-67</p>
+      <p><strong>Email:</strong> hello@aurelia-rings.example</p>
+      <p><strong>Адрес мастерской:</strong> г. Москва, ул. Ювелирная, д. 5</p>
+      <p><strong>Часы работы:</strong> ежедневно, 10:00–20:00</p>
+    </div>
+    <form class="contact-form" id="contactForm">
+      <h3>Есть вопрос?</h3>
+      <input type="text" placeholder="Ваше имя" required>
+      <input type="tel" placeholder="Телефон" required>
+      <textarea placeholder="Сообщение" rows="3"></textarea>
+      <button type="submit" class="btn btn-primary">Отправить</button>
+      <p class="form-note" id="contactNote"></p>
+    </form>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <span class="logo">Aurelia</span>
+    <p>© 2026 Aurelia. Все права защищены.</p>
+  </div>
+</footer>
+
+<div class="overlay" id="overlay"></div>
+
+<aside class="cart-drawer" id="cartDrawer" aria-label="Корзина">
+  <div class="cart-header">
+    <h3>Корзина</h3>
+    <button class="close-btn" id="closeCart" aria-label="Закрыть">&times;</button>
+  </div>
+  <div class="cart-items" id="cartItems"></div>
+  <div class="cart-footer">
+    <div class="cart-total">
+      <span>Итого</span>
+      <span id="cartTotal">0 ₽</span>
+    </div>
+    <button class="btn btn-primary btn-full" id="checkoutBtn">Оформить заказ</button>
+  </div>
+</aside>
+
+<div class="modal" id="productModal">
+  <div class="modal-content" id="productModalContent"></div>
+</div>
+
+<div class="modal" id="checkoutModal">
+  <div class="modal-content checkout-content">
+    <button class="close-btn" id="closeCheckout" aria-label="Закрыть">&times;</button>
+    <div id="checkoutBody">
+      <h3>Оформление заказа</h3>
+      <form id="checkoutForm">
+        <label>Имя<input type="text" name="name" required></label>
+        <label>Телефон<input type="tel" name="phone" required></label>
+        <label>Адрес доставки<input type="text" name="address" required></label>
+        <button type="submit" class="btn btn-primary btn-full">Подтвердить заказ</button>
+      </form>
+    </div>
+    <div id="checkoutSuccess" class="hidden">
+      <h3>Спасибо за заказ!</h3>
+      <p>Мы свяжемся с вами в течение часа для подтверждения деталей.</p>
+      <button class="btn btn-primary" id="checkoutDone">Готово</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
