@@ -226,6 +226,63 @@ a { color: inherit; text-decoration: none; }
   50% { transform: translateY(-14px) rotateZ(1deg); }
 }
 
+.hero-visual-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+.badge-new {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--jewel);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  text-transform: none;
+}
+
+/* Exploded-view controls */
+.explode-controls { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+
+.product-view-info .explode-controls { align-items: flex-start; margin-top: 4px; }
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--accent-dark);
+  color: var(--accent-dark);
+  gap: 8px;
+}
+
+.btn-outline:hover { background: var(--accent-soft); }
+.btn-outline.is-exploded { background: var(--accent-dark); color: #fff; }
+
+.explode-btn { padding: 10px 22px; font-size: 13.5px; }
+.explode-btn-icon { font-size: 14px; }
+
+.explode-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.3s ease;
+}
+
+.product-view-info .explode-legend { justify-content: flex-start; }
+
+.explode-legend.visible { opacity: 1; max-height: 70px; }
+.explode-legend span { display: inline-flex; align-items: center; gap: 6px; }
+
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.dot-gem { background: #7fd1ff; }
+.dot-prong { background: var(--accent); }
+.dot-band { background: var(--accent-dark); }
+
 /* Section titles */
 .section-title { font-size: clamp(26px, 3vw, 32px); text-align: center; margin-bottom: 40px; }
 

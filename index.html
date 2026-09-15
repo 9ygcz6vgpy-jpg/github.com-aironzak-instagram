@@ -43,12 +43,25 @@
 <section class="hero" id="top">
   <div class="container hero-inner">
     <div class="hero-text">
-      <p class="hero-eyebrow">Ювелирная мастерская</p>
+      <p class="hero-eyebrow">Ювелирная мастерская <span class="badge-new">3D-разборка</span></p>
       <h1>Кольца, которые остаются навсегда</h1>
       <p class="hero-sub">Золото 585 и 925 пробы, натуральные камни, ручная огранка деталей. Обручальные, помолвочные и мужские кольца из собственной мастерской.</p>
       <a href="#catalog" class="btn btn-primary">Смотреть каталог</a>
     </div>
-    <div class="hero-visual" id="heroVisual" aria-hidden="true" role="img" aria-label="Вращающаяся 3D-модель кольца с бриллиантом"></div>
+    <div class="hero-visual-wrap">
+      <div class="hero-visual" id="heroVisual" aria-hidden="true" role="img" aria-label="Вращающаяся 3D-модель кольца с бриллиантом"></div>
+      <div class="explode-controls" id="heroExplodeControls">
+        <button class="btn btn-outline explode-btn" id="heroExplodeBtn" type="button">
+          <span class="explode-btn-icon" aria-hidden="true">⇕</span>
+          <span id="heroExplodeLabel">Разобрать кольцо</span>
+        </button>
+        <div class="explode-legend" id="heroExplodeLegend">
+          <span><i class="legend-dot dot-gem"></i>Камень</span>
+          <span><i class="legend-dot dot-prong"></i>Оправа (каст)</span>
+          <span><i class="legend-dot dot-band"></i>Шинка (кольцо)</span>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 

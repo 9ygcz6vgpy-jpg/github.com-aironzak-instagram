@@ -75,8 +75,54 @@ const ringPool = [];
 let heroRing = null;
 let modalRing = null;
 const activeRenderers = new Set();
-const ringClock = new THREE.Clock();
 const has3D = typeof THREE !== 'undefined';
+const ringClock = has3D ? new THREE.Clock() : null;
+
+/* ---------- Exploded view ---------- */
+
+const GEM_EXPLODE_OFFSET = has3D ? new THREE.Vector3(0, 0.95, 0.18) : null;
+const PRONG_EXPLODE_OFFSET = has3D ? new THREE.Vector3(0, 0.42, 0.08) : null;
+const BAND_EXPLODE_OFFSET = has3D ? new THREE.Vector3(0, -0.22, -0.05) : null;
+
+function setLinePoints(line, a, b) {
+  const arr = line.geometry.attributes.position.array;
+  arr[0] = a.x; arr[1] = a.y; arr[2] = a.z;
+  arr[3] = b.x; arr[4] = b.y; arr[5] = b.z;
+  line.geometry.attributes.position.needsUpdate = true;
+}
+
+function positionRingParts(inst, t) {
+  inst.gem.position.copy(inst.gemBasePos).addScaledVector(GEM_EXPLODE_OFFSET, t);
+  inst.prongGroup.position.copy(inst.prongBasePos).addScaledVector(PRONG_EXPLODE_OFFSET, t);
+  inst.band.position.copy(inst.bandBasePos).addScaledVector(BAND_EXPLODE_OFFSET, t);
+
+  setLinePoints(inst.line1, inst.band.position, inst.prongGroup.position);
+  setLinePoints(inst.line2, inst.prongGroup.position, inst.gem.position);
+  const lineOpacity = Math.max(0, t - 0.08) * 0.9;
+  inst.line1.material.opacity = lineOpacity;
+  inst.line2.material.opacity = lineOpacity;
+
+  inst.camera.position.z = THREE.MathUtils.lerp(4.1, 5.3, t);
+  inst.camera.position.y = THREE.MathUtils.lerp(0.5, 0.8, t);
+  inst.camera.lookAt(0, THREE.MathUtils.lerp(-0.05, 0.25, t), 0);
+}
+
+function updateExplode(inst, delta) {
+  if (inst.explodeCurrent === inst.explodeTarget) return;
+  inst.explodeCurrent += (inst.explodeTarget - inst.explodeCurrent) * Math.min(1, delta * 5);
+  if (Math.abs(inst.explodeTarget - inst.explodeCurrent) < 0.002) inst.explodeCurrent = inst.explodeTarget;
+  positionRingParts(inst, inst.explodeCurrent);
+}
+
+function toggleExplode(inst, btn, labelId, legendId) {
+  const next = inst.explodeTarget > 0.5 ? 0 : 1;
+  inst.explodeTarget = next;
+  btn.classList.toggle('is-exploded', next === 1);
+  const label = document.getElementById(labelId);
+  if (label) label.textContent = next === 1 ? 'Собрать кольцо' : 'Разобрать кольцо';
+  const legend = document.getElementById(legendId);
+  if (legend) legend.classList.toggle('visible', next === 1);
+}
 
 function makeRingInstance() {
   const canvas = document.createElement('canvas');
@@ -124,12 +170,40 @@ function makeRingInstance() {
   gem.visible = false;
   group.add(gem);
 
+  const prongGeo = new THREE.ConeGeometry(0.05, 0.24, 8);
+  const prongGroup = new THREE.Group();
+  for (let i = 0; i < 4; i++) {
+    const angle = (Math.PI / 2) * i + Math.PI / 4;
+    const prong = new THREE.Mesh(prongGeo, bandMat);
+    prong.position.set(Math.cos(angle) * 0.16, 0, Math.sin(angle) * 0.16);
+    prongGroup.add(prong);
+  }
+  prongGroup.position.set(0, 0.30, 0.50);
+  prongGroup.visible = false;
+  group.add(prongGroup);
+
+  const lineMat1 = new THREE.LineBasicMaterial({ color: 0xd9ac5c, transparent: true, opacity: 0 });
+  const lineGeom1 = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const line1 = new THREE.Line(lineGeom1, lineMat1);
+  line1.visible = false;
+  group.add(line1);
+
+  const lineMat2 = lineMat1.clone();
+  const lineGeom2 = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+  const line2 = new THREE.Line(lineGeom2, lineMat2);
+  line2.visible = false;
+  group.add(line2);
+
   group.rotation.x = -0.15;
 
   scene.add(group);
 
   return {
-    canvas, renderer, scene, camera, group, bandMat, gem, gemMat,
+    canvas, renderer, scene, camera, group, band, bandMat, gem, gemMat, prongGroup, line1, line2,
+    bandBasePos: band.position.clone(),
+    gemBasePos: gem.position.clone(),
+    prongBasePos: prongGroup.position.clone(),
+    explodeTarget: 0, explodeCurrent: 0, hasGem: false,
     mounted: null, productId: null, dragging: false,
   };
 }
@@ -147,12 +221,20 @@ function applyProductToRing(inst, product) {
   inst.bandMat.metalness = bm.metalness;
   inst.bandMat.roughness = bm.roughness;
   const gemHex = GEM_HEX[product.gem];
-  if (gemHex) {
+  const hasGem = !!gemHex;
+  if (hasGem) {
     inst.gem.visible = true;
     inst.gemMat.color.setHex(gemHex);
   } else {
     inst.gem.visible = false;
   }
+  inst.prongGroup.visible = hasGem;
+  inst.line1.visible = hasGem;
+  inst.line2.visible = hasGem;
+  inst.hasGem = hasGem;
+  inst.explodeTarget = 0;
+  inst.explodeCurrent = 0;
+  positionRingParts(inst, 0);
   inst.productId = product.id;
 }
 
@@ -179,6 +261,7 @@ function ringTick() {
   const delta = Math.min(ringClock.getDelta(), 0.05);
   activeRenderers.forEach((inst) => {
     if (!inst.dragging) inst.group.rotation.y += delta * 0.55;
+    updateExplode(inst, delta);
     inst.renderer.render(inst.scene, inst.camera);
   });
   requestAnimationFrame(ringTick);
@@ -396,6 +479,19 @@ function openProductModal(id) {
   if (!product) return;
   const modal = document.getElementById('productModal');
   const content = document.getElementById('productModalContent');
+  const canExplode = has3D && product.gem !== 'none';
+  const explodeBlock = canExplode ? `
+    <div class="explode-controls">
+      <button class="btn btn-outline explode-btn" id="modalExplodeBtn" type="button">
+        <span class="explode-btn-icon" aria-hidden="true">⇕</span>
+        <span id="modalExplodeLabel">Разобрать кольцо</span>
+      </button>
+      <div class="explode-legend" id="modalExplodeLegend">
+        <span><i class="legend-dot dot-gem"></i>Камень</span>
+        <span><i class="legend-dot dot-prong"></i>Оправа (каст)</span>
+        <span><i class="legend-dot dot-band"></i>Шинка (кольцо)</span>
+      </div>
+    </div>` : '';
   content.innerHTML = `
     <button class="close-btn" id="closeProductModal" aria-label="Закрыть" style="position:absolute;top:16px;right:20px;">&times;</button>
     <div class="product-view">
@@ -406,6 +502,7 @@ function openProductModal(id) {
         <h3>${product.name}</h3>
         <p class="product-material">${product.material}</p>
         <div class="product-price">${formatPrice(product.price)}</div>
+        ${explodeBlock}
         <div class="qty-selector">
           <button class="qty-btn" id="modalDec">−</button>
           <span id="modalQty">1</span>
@@ -434,6 +531,11 @@ function openProductModal(id) {
     resizeRingInstance(modalRing, Math.round(rect.width), Math.round(rect.height));
     modalRing.mounted = mount;
     activeRenderers.add(modalRing);
+
+    if (canExplode) {
+      const explodeBtn = document.getElementById('modalExplodeBtn');
+      explodeBtn.addEventListener('click', () => toggleExplode(modalRing, explodeBtn, 'modalExplodeLabel', 'modalExplodeLegend'));
+    }
   }
 
   let qty = 1;
@@ -456,13 +558,18 @@ function closeModal(modal) {
 
 function initHero() {
   const container = document.getElementById('heroVisual');
+  const controls = document.getElementById('heroExplodeControls');
   if (!has3D) {
     container.innerHTML = ringSVG(PRODUCTS[4], 'hero');
+    if (controls) controls.style.display = 'none';
     return;
   }
   heroRing = makeRingInstance();
   applyProductToRing(heroRing, PRODUCTS[4]);
   mountRing(heroRing, container);
+
+  const btn = document.getElementById('heroExplodeBtn');
+  if (btn) btn.addEventListener('click', () => toggleExplode(heroRing, btn, 'heroExplodeLabel', 'heroExplodeLegend'));
 }
 
 function initFilters() {
